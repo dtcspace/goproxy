@@ -269,6 +269,9 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 	req.basicAuth = basicAuth
 	log.Printf("%s:%s", req.Method, req.hostOrURL)
 
+	// Added by Walter for Proxy Authenticate
+	err = req.ProxyAuth();
+
 	if req.IsHTTPS() {
 		err = req.HTTPS()
 	} else {
@@ -277,12 +280,12 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 	return
 }
 func (req *HTTPRequest) HTTP() (err error) {
-	if req.isBasicAuth {
-		err = req.BasicAuth()
-		if err != nil {
-			return
-		}
-	}
+	//if req.isBasicAuth {
+	//	err = req.BasicAuth()
+	//	if err != nil {
+	//		return
+	//	}
+	//}
 	req.URL, err = req.getHTTPURL()
 	if err == nil {
 		u, _ := url.Parse(req.URL)
@@ -305,38 +308,72 @@ func (req *HTTPRequest) IsHTTPS() bool {
 	return req.Method == "CONNECT"
 }
 
-func (req *HTTPRequest) BasicAuth() (err error) {
-
-	//log.Printf("request :%s", string(b[:n]))
-	authorization, err := req.getHeader("Authorization")
+func (req *HTTPRequest) ProxyAuth() (err error) {
+	defer func() {
+		if err != nil {
+			CloseConn(req.conn)
+		}
+	}()
+	// Proxy-Authorization: Basic d2FsdGVyOjEyMw==
+	// 401 Unauthorized 未授权
+	// 403 Forbidden 拒绝访问
+	// 407 Proxy Authentication Required 必须提供代理证书
+	authorization, err := req.getHeader("Proxy-Authorization")
 	if err != nil {
-		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"\"\r\n\r\nUnauthorized")
-		CloseConn(req.conn)
+		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
 		return
 	}
-	//log.Printf("Authorization:%s", authorization)
 	basic := strings.Fields(authorization)
 	if len(basic) != 2 {
-		err = fmt.Errorf("authorization data error,ERR:%s", authorization)
-		CloseConn(req.conn)
+		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
 		return
 	}
 	user, err := base64.StdEncoding.DecodeString(basic[1])
 	if err != nil {
-		err = fmt.Errorf("authorization data parse error,ERR:%s", err)
-		CloseConn(req.conn)
+		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
 		return
 	}
 	authOk := (*req.basicAuth).Check(string(user))
-	//log.Printf("auth %s,%v", string(user), authOk)
 	if !authOk {
-		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")
-		CloseConn(req.conn)
-		err = fmt.Errorf("basic auth fail")
+		err = fmt.Errorf("HTTP/1.1 401 Unauthorized")
 		return
 	}
 	return
 }
+
+//func (req *HTTPRequest) BasicAuth() (err error) {
+//
+//	//log.Printf("request :%s", string(b[:n]))
+//	authorization, err := req.getHeader("Authorization")
+//	if err != nil {
+//		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"\"\r\n\r\nUnauthorized")
+//		CloseConn(req.conn)
+//		return
+//	}
+//	//log.Printf("Authorization:%s", authorization)
+//	basic := strings.Fields(authorization)
+//	if len(basic) != 2 {
+//		err = fmt.Errorf("authorization data error,ERR:%s", authorization)
+//		CloseConn(req.conn)
+//		return
+//	}
+//	user, err := base64.StdEncoding.DecodeString(basic[1])
+//	if err != nil {
+//		err = fmt.Errorf("authorization data parse error,ERR:%s", err)
+//		CloseConn(req.conn)
+//		return
+//	}
+//	authOk := (*req.basicAuth).Check(string(user))
+//	//log.Printf("auth %s,%v", string(user), authOk)
+//	if !authOk {
+//		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\n\r\nUnauthorized")
+//		CloseConn(req.conn)
+//		err = fmt.Errorf("basic auth fail")
+//		return
+//	}
+//	return
+//}
+
 func (req *HTTPRequest) getHTTPURL() (URL string, err error) {
 	if !strings.HasPrefix(req.hostOrURL, "/") {
 		return req.hostOrURL, nil
