@@ -268,9 +268,13 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 	req.isBasicAuth = isBasicAuth
 	req.basicAuth = basicAuth
 	log.Printf("%s:%s", req.Method, req.hostOrURL)
+	log.Print(string(req.HeadBuf))
 
 	// Added by Walter for Proxy Authenticate
-	err = req.ProxyAuth();
+	err = req.ProxyAuth()
+	if err != nil {
+		return
+	}
 
 	if req.IsHTTPS() {
 		err = req.HTTPS()
