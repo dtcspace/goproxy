@@ -325,21 +325,26 @@ func (req *HTTPRequest) ProxyAuth() (err error) {
 	authorization, err := req.getHeader("Proxy-Authorization")
 	if err != nil {
 		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
+		fmt.Fprint((*req.conn), err,"\r\nProxy-Authenticate: Basic realm=\"\"\r\n\r\nProxy Authentication Required")
 		return
 	}
 	basic := strings.Fields(authorization)
 	if len(basic) != 2 {
 		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
+		fmt.Fprint((*req.conn), err,"\r\nProxy-Authenticate: Basic realm=\"\"\r\n\r\nProxy Authentication Required")
 		return
 	}
 	user, err := base64.StdEncoding.DecodeString(basic[1])
 	if err != nil {
 		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
+		fmt.Fprint((*req.conn), err,"\r\nProxy-Authenticate: Basic realm=\"\"\r\n\r\nProxy Authentication Required")
 		return
 	}
 	authOk := (*req.basicAuth).Check(string(user))
 	if !authOk {
-		err = fmt.Errorf("HTTP/1.1 401 Unauthorized")
+		//err = fmt.Errorf("HTTP/1.1 401 Unauthorized")
+		err = fmt.Errorf("HTTP/1.1 407 Proxy Authentication Required")
+		fmt.Fprint((*req.conn), err,"\r\nProxy-Authenticate: Basic realm=\"\"\r\n\r\nUnauthorized")
 		return
 	}
 	return
